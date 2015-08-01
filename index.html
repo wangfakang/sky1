@@ -12,37 +12,398 @@
   <body>
     <section class="page-header">
       <h1 class="project-name">Sky</h1>
-      <h2 class="project-tagline"></h2>
+      <h2 class="project-tagline">Tengine Dynamic Dns 解析</h2>
       <a href="https://github.com/wangfakang/sky" class="btn">View on GitHub</a>
       <a href="https://github.com/wangfakang/sky/zipball/master" class="btn">Download .zip</a>
       <a href="https://github.com/wangfakang/sky/tarball/master" class="btn">Download .tar.gz</a>
     </section>
 
     <section class="main-content">
-      <h3>
-<a id="welcome-to-github-pages" class="anchor" href="#welcome-to-github-pages" aria-hidden="true"><span class="octicon octicon-link"></span></a>Welcome to GitHub Pages.</h3>
+      <p><code>对NGX_HTTP_UPSTREAM_DYNAMIC_MODULE的分析：
+</code></p>
 
-<p>This automatic page generator is the easiest way to create beautiful pages for all of your projects. Author your page content here <a href="https://guides.github.com/features/mastering-markdown/">using GitHub Flavored Markdown</a>, select a template crafted by a designer, and publish. After your page is generated, you can check out the new <code>gh-pages</code> branch locally. If you’re using GitHub for Mac or GitHub for Windows, simply sync your repository and you’ll see the new branch.</p>
+<h1>
+<a id="内容" class="anchor" href="#%E5%86%85%E5%AE%B9" aria-hidden="true"><span class="octicon octicon-link"></span></a>内容：</h1>
 
-<h3>
-<a id="designer-templates" class="anchor" href="#designer-templates" aria-hidden="true"><span class="octicon octicon-link"></span></a>Designer Templates</h3>
+<h2>
+<a id="一配置说明" class="anchor" href="#%E4%B8%80%E9%85%8D%E7%BD%AE%E8%AF%B4%E6%98%8E" aria-hidden="true"><span class="octicon octicon-link"></span></a>一：配置说明</h2>
 
-<p>We’ve crafted some handsome templates for you to use. Go ahead and click 'Continue to layouts' to browse through them. You can easily go back to edit your page before publishing. After publishing your page, you can revisit the page generator and switch to another theme. Your Page content will be preserved.</p>
+<h2>
+<a id="二代码解析" class="anchor" href="#%E4%BA%8C%E4%BB%A3%E7%A0%81%E8%A7%A3%E6%9E%90" aria-hidden="true"><span class="octicon octicon-link"></span></a>二：代码解析</h2>
 
-<h3>
-<a id="creating-pages-manually" class="anchor" href="#creating-pages-manually" aria-hidden="true"><span class="octicon octicon-link"></span></a>Creating pages manually</h3>
-
-<p>If you prefer to not use the automatic generator, push a branch named <code>gh-pages</code> to your repository to create a page manually. In addition to supporting regular HTML content, GitHub Pages support Jekyll, a simple, blog aware static site generator. Jekyll makes it easy to create site-wide headers and footers without having to copy them across every page. It also offers intelligent blog support and other advanced templating features.</p>
-
-<h3>
-<a id="authors-and-contributors" class="anchor" href="#authors-and-contributors" aria-hidden="true"><span class="octicon octicon-link"></span></a>Authors and Contributors</h3>
-
-<p>You can <a href="https://github.com/blog/821" class="user-mention">@mention</a> a GitHub username to generate a link to their profile. The resulting <code>&lt;a&gt;</code> element will link to the contributor’s GitHub Profile. For example: In 2007, Chris Wanstrath (<a href="https://github.com/defunkt" class="user-mention">@defunkt</a>), PJ Hyett (<a href="https://github.com/pjhyett" class="user-mention">@pjhyett</a>), and Tom Preston-Werner (<a href="https://github.com/mojombo" class="user-mention">@mojombo</a>) founded GitHub.</p>
+<h2>
+<a id="三总结注意点" class="anchor" href="#%E4%B8%89%E6%80%BB%E7%BB%93%E6%B3%A8%E6%84%8F%E7%82%B9" aria-hidden="true"><span class="octicon octicon-link"></span></a>三：总结注意点</h2>
 
 <h3>
-<a id="support-or-contact" class="anchor" href="#support-or-contact" aria-hidden="true"><span class="octicon octicon-link"></span></a>Support or Contact</h3>
+<a id="一配置说明-1" class="anchor" href="#%E4%B8%80%E9%85%8D%E7%BD%AE%E8%AF%B4%E6%98%8E-1" aria-hidden="true"><span class="octicon octicon-link"></span></a>一：配置说明</h3>
 
-<p>Having trouble with Pages? Check out our <a href="https://help.github.com/pages">documentation</a> or <a href="https://github.com/contact">contact support</a> and we’ll help you sort it out.</p>
+<p>upstream backend {
+        dynamic_resolve fallback=stale fail_timeout=30s;</p>
+
+<pre><code>    server www.baidu.com;
+
+}
+
+server {
+
+    location / {
+        proxy_pass http://backend;
+    }
+}
+</code></pre>
+
+<p>指定在某个upstream中启用动态域名解析功能。</p>
+
+<p>解析:
+其中有一个结构体类型:</p>
+
+<p>ngx_http_upstream_dynamic_srv_t  {
+    ngx_int_t     enabled;
+    ngx_int_t     fallback;
+    time_t        fail_timeout;
+    time_t        fail_check;</p>
+
+<pre><code>ngx_http_upstream_init_pt  original_init_get_peer;
+    ngx_http_upstream_init_peer_t  original_init_peer;
+</code></pre>
+
+<p>}</p>
+
+<p>属性含义：
+    fallback参数指定了当域名无法解析时采取的动作：</p>
+
+<pre><code>stale, 使用tengine启动的时候获取的旧地址
+next, 选择upstream中的下一个server
+shutdown, 结束当前请求
+fail_timeout参数指定了将DNS服务当做无法使用的时间，也就是当某次DNS请求失败后，假定后续多长的时间内DNS服务依然不可用，以减少对无效DNS的查询。
+</code></pre>
+
+<h3>
+<a id="二代码解析-1" class="anchor" href="#%E4%BA%8C%E4%BB%A3%E7%A0%81%E8%A7%A3%E6%9E%90-1" aria-hidden="true"><span class="octicon octicon-link"></span></a>二：代码解析</h3>
+
+<p>//发现dynamic_resolve指令的时候调用该函数进行处理
+static char *
+ngx_http_upstream_dynamic(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
+{
+    ngx_http_upstream_srv_conf_t            *uscf;
+    ngx_http_upstream_dynamic_srv_conf_t    *dcf;
+    ngx_str_t   *value, s;
+    ngx_uint_t   i;
+    time_t       fail_timeout;
+    ngx_int_t    fallback;</p>
+
+<pre><code>uscf = ngx_http_conf_get_module_srv_conf(cf, ngx_http_upstream_module);
+
+dcf = ngx_http_conf_upstream_srv_conf(uscf,
+                                      ngx_http_upstream_dynamic_module);
+
+if (dcf-&gt;original_init_upstream) {
+    return "is duplicate";
+}
+//设置原有的回调函数（可以叫做记录，本来应该赋给uscf-&gt;peer.init_upstream的）
+dcf-&gt;original_init_upstream = uscf-&gt;peer.init_upstream
+                              ? uscf-&gt;peer.init_upstream
+                              : ngx_http_upstream_init_round_robin;
+
+uscf-&gt;peer.init_upstream = ngx_http_upstream_init_dynamic;
+
+/* read options */
+
+return NGX_CONF_OK;
+</code></pre>
+
+<p>}</p>
+
+<p>上面设置的uscf-&gt;peer.init_upstream函数在 ngx_http_upstream_init_main_conf中调用，其uscf-&gt;peer.init_upstream指向原型如下：</p>
+
+<p>static ngx_int_t
+ngx_http_upstream_init_dynamic(ngx_conf_t *cf,
+    ngx_http_upstream_srv_conf_t *us)
+{</p>
+
+<pre><code>//此处执行一个后端的负载均衡算法，默认是round_robin
+if (dcf-&gt;original_init_upstream(cf, us) != NGX_OK) {
+    return NGX_ERROR;
+}
+
+if (us-&gt;servers) {
+    server = us-&gt;servers-&gt;elts;
+
+    for (i = 0; i &lt; us-&gt;servers-&gt;nelts; i++) {
+        host = server[i].host;
+        //将ip地址转换为长整形数字
+        if (ngx_inet_addr(host.data, host.len) == INADDR_NONE) {
+            break;
+        }
+    }
+
+    if (i == us-&gt;servers-&gt;nelts) {
+        dcf-&gt;enabled = 0;
+
+        return NGX_OK;
+    }
+}
+// us-&gt;peer.init 默认是init_round_robin_peer函数  
+dcf-&gt;original_init_peer = us-&gt;peer.init;
+//下面是当一个请求来到的时候进行调用该函数
+us-&gt;peer.init = ngx_http_upstream_init_dynamic_peer;
+//把其设置为激活状态
+dcf-&gt;enabled = 1;
+
+return NGX_OK;
+</code></pre>
+
+<p>}</p>
+
+<p>其中在ngx_http_upstream_init_request中调用 us-&gt;peer.init，其中在上面函数中其指向ngx_http_upstream_init_dynamic_peer如下：</p>
+
+<p>static ngx_int_t
+ngx_http_upstream_init_dynamic_peer(ngx_http_request_t *r,
+    ngx_http_upstream_srv_conf_t *us)
+{</p>
+
+<pre><code>//默认是init_round_robin_peer
+if (dcf-&gt;original_init_peer(r, us) != NGX_OK) {
+    return NGX_ERROR;
+}
+//下面就是一点小的技巧，修改原有回调指向，其实就想在原来的函数基础上增加自己的功能，自己的函数中再次调用原来的函数
+//这个思想值得学习
+dp-&gt;conf = dcf;
+dp-&gt;upstream = r-&gt;upstream;
+dp-&gt;data = r-&gt;upstream-&gt;peer.data;
+dp-&gt;original_get_peer = r-&gt;upstream-&gt;peer.get;
+dp-&gt;original_free_peer = r-&gt;upstream-&gt;peer.free;
+dp-&gt;request = r;
+
+r-&gt;upstream-&gt;peer.data = dp;
+r-&gt;upstream-&gt;peer.get = ngx_http_upstream_get_dynamic_peer;
+r-&gt;upstream-&gt;peer.free = ngx_http_upstream_free_dynamic_peer;
+
+return NGX_OK;
+</code></pre>
+
+<p>}</p>
+
+<p>最后在ngx_http_upstream_init_request函数中调用ngx_http_upstream_connect(r, u)在其又调用ngx_event_connect_peer(&amp;u-&gt;peer)
+ rc = pc-&gt;get(pc, pc-&gt;data);其中pc-&gt;get就是指向ngx_http_upstream_get_dynamic_peer;此时就完成了在upstream模块选择使用动态
+dns查询后端peer了。其中ngx_http_upstream_get_dynamic_peer如下：</p>
+
+<p>static ngx_int_t
+ ngx_http_upstream_get_dynamic_peer(ngx_peer_connection_t *pc, void *data)
+{
+    .....</p>
+
+<pre><code>if (pc-&gt;resolved == NGX_HTTP_UPSTREAM_DR_OK) {
+    return NGX_OK;
+}
+
+dscf = bp-&gt;conf;
+r = bp-&gt;request;
+u = r-&gt;upstream;
+</code></pre>
+
+<p>//当dns无法解析的时候  按照配置文件所选择的方式进行执行<br>
+    if (pc-&gt;resolved == NGX_HTTP_UPSTREAM_DR_FAILED) {</p>
+
+<pre><code>    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, pc-&gt;log, 0,
+                   "resolve failed! fallback: %ui", dscf-&gt;fallback);
+
+    switch (dscf-&gt;fallback) {
+    //当无法访问的时候还是使用旧的解析结果
+    case NGX_HTTP_UPSTREAM_DYN_RESOLVE_STALE:
+        return NGX_OK;
+      //当无法访问的时候把当其关闭
+    case NGX_HTTP_UPSTREAM_DYN_RESOLVE_SHUTDOWN:
+        ngx_http_upstream_finalize_request(r, u, NGX_HTTP_BAD_GATEWAY);
+        return NGX_YIELD;
+      //当无法访问的时候默认使用下一个server
+    default:
+        /* default fallback action: check next upstream */
+        return NGX_DECLINED;
+    }
+
+    return NGX_DECLINED;
+}
+//当没有失败的时候则进行超时时间的判断，在timeout时间内dns是无效的
+if (dscf-&gt;fail_check
+    &amp;&amp; (ngx_time() - dscf-&gt;fail_check &lt; dscf-&gt;fail_timeout))
+{
+    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, pc-&gt;log, 0,
+                   "in fail timeout period, fallback: %ui", dscf-&gt;fallback);
+
+    switch (dscf-&gt;fallback) {
+
+    case NGX_HTTP_UPSTREAM_DYN_RESOLVE_STALE:
+        return bp-&gt;original_get_peer(pc, bp-&gt;data);
+
+    case NGX_HTTP_UPSTREAM_DYN_RESOLVE_SHUTDOWN:
+        ngx_http_upstream_finalize_request(r, u, NGX_HTTP_BAD_GATEWAY);
+        return NGX_YIELD;
+
+    default:
+        /* default fallback action: check next upstream, still need
+         * to get peer in fail timeout period
+         */
+        return bp-&gt;original_get_peer(pc, bp-&gt;data);
+    }
+
+    return NGX_DECLINED;
+}
+
+//bp-&gt;original_get_peer 其指向各种负载均衡算法的(ip_hash、round_robin、consistent_hash)get_peer
+
+rc = bp-&gt;original_get_peer(pc, bp-&gt;data);
+
+if (rc != NGX_OK) {
+    return rc;
+}
+
+/* resolve name */
+
+if (pc-&gt;host == NULL) {
+    ngx_log_debug0(NGX_LOG_DEBUG_HTTP, pc-&gt;log, 0,
+                   "load balancer doesn't support dyn resolve!");
+    return NGX_OK;
+}
+//判断该host是不是一个IP  若是一个IP则直接返回
+if (ngx_inet_addr(pc-&gt;host-&gt;data, pc-&gt;host-&gt;len) != INADDR_NONE) {
+    ngx_log_debug0(NGX_LOG_DEBUG_HTTP, pc-&gt;log, 0,
+                   "host is an IP address, connect directly!");
+    return NGX_OK;
+}
+
+clcf = ngx_http_get_module_loc_conf(r, ngx_http_core_module);
+if (clcf-&gt;resolver == NULL) {
+    ngx_log_error(NGX_LOG_ERR, r-&gt;connection-&gt;log, 0,
+                  "resolver has not been configured!");
+    return NGX_OK;
+}
+
+temp.name = *pc-&gt;host;
+//开始准备DNS解析 
+ctx = ngx_resolve_start(clcf-&gt;resolver, &amp;temp);
+if (ctx == NULL) {
+    ngx_log_error(NGX_LOG_ERR, r-&gt;connection-&gt;log, 0,
+                  "resolver start failed!");
+    return NGX_OK;
+}
+//当没有配置dns服务器的时候
+if (ctx == NGX_NO_RESOLVER) {
+    ngx_log_error(NGX_LOG_ERR, r-&gt;connection-&gt;log, 0,
+                  "resolver started but no resolver!");
+    return NGX_OK;
+}
+
+ctx-&gt;name = *pc-&gt;host;
+/* TODO remove */
+// ctx-&gt;type = NGX_RESOLVE_A;
+/* END */
+//设置其回调函数
+//此函数主要是做一些后续处理，如当dns查询成功或是失败修改一些状态  
+//以及函数ngx_resolve_name_done的调用，用来释放一些空间以及调用ngx_resolver_expire
+//上面函数做一些rn结点的过期检查 
+ctx-&gt;handler = ngx_http_upstream_dynamic_handler;
+ctx-&gt;data = r;
+ctx-&gt;timeout = clcf-&gt;resolver_timeout;
+
+u-&gt;dyn_resolve_ctx = ctx;
+//根据名字进行dns查询
+if (ngx_resolve_name(ctx) != NGX_OK) {
+    ngx_log_error(NGX_LOG_ERR, pc-&gt;log, 0,
+                  "resolver name failed!\n");
+
+    u-&gt;dyn_resolve_ctx = NULL;
+
+    return NGX_OK;
+}
+
+return NGX_YIELD;
+</code></pre>
+
+<p>}</p>
+
+<h3>
+<a id="三总结注意点-1" class="anchor" href="#%E4%B8%89%E6%80%BB%E7%BB%93%E6%B3%A8%E6%84%8F%E7%82%B9-1" aria-hidden="true"><span class="octicon octicon-link"></span></a>三：总结注意点</h3>
+
+<h3>
+<a id="注意点" class="anchor" href="#%E6%B3%A8%E6%84%8F%E7%82%B9" aria-hidden="true"><span class="octicon octicon-link"></span></a>注意点:</h3>
+
+<ul>
+<li><p>1.当一个域名下对应有多个ip的时候:
+  但是在调用ngx_http_upstream_get_dynamic_peer的时候调用round_robin_get_peer选择了一个server,但是其判断该peer的host-&gt;name是一个域名,此时nginx会做域名解析
+最后只会随机的进行选择一个server进行连接.其nginx是这样做的当一个域名对应多个ip的时候，对其获得的ip进行随机排序，最后是选择第一个。
+  //当有多个addr的时候，函数是给 rn-&gt;naddrs 进行随机排序 
+   addrs = ngx_resolver_export(r, rn, 1);
+  //每次只是选择域名下的第一个addr<br>
+    csin = (struct sockaddr_in *) ctx-&gt;addrs[0].sockaddr;</p></li>
+<li><p>2.配置了dynamic_resolve指令可能不会生效:
+  当在使用ngx_http_upstream_dynamic(upstream动态域名解析模块)模块的时候切记点:只有配置了resolver的时候才会去动态DNS查询(此处的配置resolver有两处:第一处是在nginx的配置文件中location server http配置块都可以  第二处是nginx会在该路径下读取(/etc/resolve.conf下寻找)当#define NGX_RESOLVER_FILE  "/etc/resolv.conf"
+))</p></li>
+<li><p>3.当其upstream模块动态dns生效了如何进行dns解析:
+  首先判断该host-&gt;name是一个ip还是一个域名,若是一个ip直接return ok,否则会在本地catche进行查询域名对应的ip,对其域名进行crc哈希得到一个hash值,然后在name_rbtree中进行查找得到resolver node节点(rn),进行判断rn ?= NULL ,当其不为空则表明在catche中找到了,然后判断其是否过期,没有过期的话就直接进行选择,执行回调函数ctx-&gt;handlr(ctx)设置pc-&gt;sockaddr进行后端的连接处理.
+ 当其所访问到的catche过期了则把该节点从队列中删除,然后重新发起dns请求,把得到的域名对应的ip copy到 name_rbtree rn中(rn-&gt;u.addrs=addr).(注意在前面只是删除了队列中数据  并没有删除name_rbtree中的节点)</p></li>
+<li><p>4.当查询一个catch中不存在的域名的时候:
+  这个和第3点就多一步工作分配一个rn节点,并且插入name_rbtree中,得到该值后在插入队列.</p></li>
+<li><p>5.缓存中的rn节点失效时间是如何管理的:
+  其中在resolver指令有一个参数vailed值(r-&gt;vailed = vailed),其中在进行节点失效与否时有这样一句: rn-&gt;vailed &gt;= ngx_time();
+  其中rn-&gt;vailed = ngx_time() + (r-&gt;vailed ? r-&gt;vailed : rn-&gt;ttl):
+  其中rn-&gt;ttl = 0xff ff ff ff default  rn-&gt;ttl = min(rn-&gt;ttl,ttl)  ttl 是每次dns返回来的ttl.
+  所以其rn节点的有效时间用户可以自己配置,若没有配置则使用dns返回来的ttl作为有效时间.</p></li>
+<li><p>6.当本地catch的某一个rn节点长期没有访问时如何处理:
+  每次在get_dynamic_peer查询结束的时候（调用ngx_resolve_addr_done），都会检查有没有缓存过期，如果有，就会进行释放。
+  其原理就是调用:ngx_resolver_expire  其中:
+       q = ngx_queue_last(queue);<br>
+       rn = ngx_queue_data(q,ngx_resolver_node_t,queue);
+       now=ngx_now  if now &gt; rn-&gt;expire  则把该rn节点分别从queue以及name_rbtree中删除.
+       其中每次缓存命中的时候都会 update expire: rn-&gt;expire = r-&gt;expire + ngx_now(); r-&gt;expire=30</p></li>
+<li><p>7.区分resolver指令中的vailed与dynamic_resolve中的fail_timeout的区别:
+  其中resolver指令中的vailed是catche中rn节点的有效期时间,dynamic_resolve中的fail_timeout表示上次dns解析失败与本次是否可以使用dns解析最大时间间隔(即DNS服务无法使用的时间).</p></li>
+<li><p>8.当其resolver后配置了多个server的时候(即有多个dns的时候)：
+  nginx 会采用Round Robin的方式轮流查询各个dns server。在方法ngx_resolver_send_query中通过在每次调用时改变last_connection来轮流使用不同的dns server进行查询.</p></li>
+<li><p>9.在域名后面是否可以指定weight等参数：
+  在upstream模块的server模块若后面给得是一个域名，是可以指定其weight的值，其实可以这样理解一个域名对应有ip（可能有多个ip），其weight值就是其ip对应的weight.
+其相应的参数是否生效只和相应的负载均衡算法有关，如在使用ip_hash算法的时候其中backup参数对其无效.</p></li>
+<li>
+<p>10.dns本地缓存数据结构以及架构是如何设计的:
+   函数ngx_resolver_create()对其进行创建:
+   对查询结果的缓存，采用Red Black Tree的数据结构，以要查询名字的Hash作为Key,其中有可能不同域名的hash的值相同,此时则比较域名的字符串大小插入rbtree中,当然最后查询的时候也是按照同样的规则进行查找,节点信息存放在 struct ngx_resolver_node_t中。
+   因为resolver是全局的，与任何一个connection都无关，所有需要放在一个随时都可以取到的地方，如 ngx_mail_core_srv_conf_t结构体上，在使用时从当前session找到ngx_mail_core_srv_conf_t，然后找到resolver。</p>
+
+<p>为不阻塞当前线程，Nginx采用了异步的方式进行域名查询。整个查询过程主要分为三个步骤，这点在各种异步处理时都是一样的：</p>
+
+<pre><code> (1).准备函数调用需要的信息，并设置回调方法
+ (2).调用函数
+ (3).处理结束后回调方法被调用
+</code></pre>
+</li>
+</ul>
+
+<h2>
+<a id="有问题反馈" class="anchor" href="#%E6%9C%89%E9%97%AE%E9%A2%98%E5%8F%8D%E9%A6%88" aria-hidden="true"><span class="octicon octicon-link"></span></a>有问题反馈</h2>
+
+<p>在使用中有任何问题，欢迎反馈给我，可以用以下联系方式跟我交流</p>
+
+<ul>
+<li>邮件(1031379296#qq.com, 把#换成@)</li>
+<li>QQ: 1031379296</li>
+<li>weibo: <a href="http://weibo.com/fakang">@王发康</a>
+</li>
+</ul>
+
+<h2>
+<a id="感激" class="anchor" href="#%E6%84%9F%E6%BF%80" aria-hidden="true"><span class="octicon octicon-link"></span></a>感激</h2>
+
+<h3>
+<a id="chunshengsteratgmailcom" class="anchor" href="#chunshengsteratgmailcom" aria-hidden="true"><span class="octicon octicon-link"></span></a>chunshengsterATgmail.com</h3>
+
+<h2>
+<a id="关于作者" class="anchor" href="#%E5%85%B3%E4%BA%8E%E4%BD%9C%E8%80%85" aria-hidden="true"><span class="octicon octicon-link"></span></a>关于作者</h2>
+
+<h3>
+<a id="linuxnginxgolangcc爱好者" class="anchor" href="#linuxnginxgolangcc%E7%88%B1%E5%A5%BD%E8%80%85" aria-hidden="true"><span class="octicon octicon-link"></span></a>Linux\nginx\golang\c\c++爱好者</h3>
+
+<h3>
+<a id="欢迎一起交流--一起学习" class="anchor" href="#%E6%AC%A2%E8%BF%8E%E4%B8%80%E8%B5%B7%E4%BA%A4%E6%B5%81--%E4%B8%80%E8%B5%B7%E5%AD%A6%E4%B9%A0" aria-hidden="true"><span class="octicon octicon-link"></span></a>欢迎一起交流  一起学习#</h3>
 
       <footer class="site-footer">
         <span class="site-footer-owner"><a href="https://github.com/wangfakang/sky">Sky</a> is maintained by <a href="https://github.com/wangfakang">wangfakang</a>.</span>
