@@ -30,69 +30,376 @@
 
       </header>
       <section>
-        <p><code>对proxy_pass的分析：
-</code></p>
-
-<h1>
-<a id="内容" class="anchor" href="#%E5%86%85%E5%AE%B9" aria-hidden="true"><span class="octicon octicon-link"></span></a>内容：</h1>
-
-<h3>
-<a id="proxy_pass后面使用变量时性能的影响" class="anchor" href="#proxy_pass%E5%90%8E%E9%9D%A2%E4%BD%BF%E7%94%A8%E5%8F%98%E9%87%8F%E6%97%B6%E6%80%A7%E8%83%BD%E7%9A%84%E5%BD%B1%E5%93%8D" aria-hidden="true"><span class="octicon octicon-link"></span></a>proxy_pass后面使用变量时性能的影响:</h3>
-
-<h1>
-<a id="１在proxy_pass模块中后面跟变量与常量的区别-------" class="anchor" href="#%EF%BC%91%E5%9C%A8proxy_pass%E6%A8%A1%E5%9D%97%E4%B8%AD%E5%90%8E%E9%9D%A2%E8%B7%9F%E5%8F%98%E9%87%8F%E4%B8%8E%E5%B8%B8%E9%87%8F%E7%9A%84%E5%8C%BA%E5%88%AB-------" aria-hidden="true"><span class="octicon octicon-link"></span></a>１．在proxy_pass模块中后面跟变量与常量的区别：       </h1>
-
-<pre><code>(1).如果在proxy_pass后面给的是一个具体的upstream，则nginx在proxy_pass模块的时候会设置
-proxy_length为null则后面就不会执行ngx_http_proxy_eval就导致resolved为null，则在upstream
-模块的时候ngx_http_upstream_init_request中就直接执行uscf = u-&gt;conf-&gt;upstream不会去遍历
-upstream list.否则在proxy_pass中ngx_http_script_variables_count中统计变量的个数是不为０的
-，则会执行ngx_http_script_compile函数会执行ngx_http_script_init_arrys函数(这个函数会进行相
-关变量长度的分配工作)，最后在ngx_http_proxy_handler中判断其proxy_length进行执行
-ngx_http_proxy_eval函数，     
-(2).在这个函数中会调用ngx_parse_url函数进行相关url的解析工作而且还会为resolved进行分配空间，
-最后在upstream模块中调用ngx_http_upstream_init_request中就会去访问相应的upstream　list从而
-来进行判断（umcf-&gt;upstreams.elts）
-(3).当proxy_pass后面给的是变量的时候根据上面知道，没来一个请求的时候就会去遍历upstream list，
-这样会是qps的一个性能瓶颈，在tengine中为了解决这个问题，使用了red_black_tree来解决这个问题
-－－－使用红黑树来存储upstream.
-</code></pre>
-
-<h1>
-<a id="２proxy_pass后面的url最后有反斜杠的区别---" class="anchor" href="#%EF%BC%92proxy_pass%E5%90%8E%E9%9D%A2%E7%9A%84url%E6%9C%80%E5%90%8E%E6%9C%89%E5%8F%8D%E6%96%9C%E6%9D%A0%E7%9A%84%E5%8C%BA%E5%88%AB---" aria-hidden="true"><span class="octicon octicon-link"></span></a>２．proxy_pass后面的url最后有反斜杠的区别：   </h1>
-
-<pre><code>(1).当proxy_pass后面给的url有加反斜杠的时候，此时不会把当前location中的path加到proxy_pass
-后面，否则会加上的．
-</code></pre>
-
-<h1>
-<a id="３什么时候proxy_pass后面必须要给一个变量---" class="anchor" href="#%EF%BC%93%E4%BB%80%E4%B9%88%E6%97%B6%E5%80%99proxy_pass%E5%90%8E%E9%9D%A2%E5%BF%85%E9%A1%BB%E8%A6%81%E7%BB%99%E4%B8%80%E4%B8%AA%E5%8F%98%E9%87%8F---" aria-hidden="true"><span class="octicon octicon-link"></span></a>３．什么时候proxy_pass后面必须要给一个变量：   </h1>
-
-<pre><code>(1)什么时候需要使用变量，那就看看使用变量与否的区别是啥就一目了然了．     
-</code></pre>
-
-<h1>
-<a id="４相关防盗链摘自知道--------" class="anchor" href="#%EF%BC%94%E7%9B%B8%E5%85%B3%E9%98%B2%E7%9B%97%E9%93%BE%E6%91%98%E8%87%AA%E7%9F%A5%E9%81%93--------" aria-hidden="true"><span class="octicon octicon-link"></span></a>４．相关防盗链（摘自知道）:        </h1>
-
-<pre><code>(1).nginx为了实现反向代理的需求而增加了一个ngx_http_proxy_module模块。其中proxy_set_header
-指令就是该模块需要读取的配置文件。在这里，所有设置的值的含义和http请求同中的含义完全相同，
-除了Host外还有X-Forward-For。
-(2).Host的含义是表明请求的主机名，因为nginx作为反向代理使用，而如果后端真是的服务器设置有
-类似防盗链或者根据http请求头中的host字段来进行路由或判断功能的话，如果反向代理层的nginx不
-重写请求头中的host字段，将会导致请求失败【默认反向代理服务器会向后端真实服务器发送请求，并
-且请求头中的host字段应为proxy_pass指令设置的服务器。
-(3).同理，X_Forward_For字段表示该条http请求是有谁发起的？如果反向代理服务器不重写该请求头
-的话，那么后端真实服务器在处理时会认为所有的请求都来在反向代理服务器，如果后端有防攻击策
-略的话，那么机器就被封掉了。因此，在配置用作反向代理的nginx中一般会增加两条配置，修改http
-的请求头：
-proxy_set_header Host $http_host;
-proxy_set_header X-Forward-For $remote_addr;
-(4)这里的$http_host和$remote_addr都是nginx的导出变量，可以再配置文件中直接使用。如果Host
-请求头部没有出现在请求头中，则$http_host值为空，但是$host值为主域名。因此，一般而言，会用
-$host代替$http_host变量，从而避免http请求中丢失Host头部的情况下Host不被重写的失误．
-</code></pre>
+        <p><code>对NGX_HTTP_UPSTREAM_DYNAMIC_MODULE的分析：</code></p>
 
 <h2>
-<a id="有问题反馈" class="anchor" href="#%E6%9C%89%E9%97%AE%E9%A2%98%E5%8F%8D%E9%A6%88" aria-hidden="true"><span class="octicon octicon-link"></span></a>有问题反馈</h2>
+<a id="内容" class="anchor" href="#%E5%86%85%E5%AE%B9" aria-hidden="true"><span class="octicon octicon-link"></span></a>内容：</h2>
+
+<h2>
+<a id="一配置说明" class="anchor" href="#%E4%B8%80%E9%85%8D%E7%BD%AE%E8%AF%B4%E6%98%8E" aria-hidden="true"><span class="octicon octicon-link"></span></a>一：<a href="#%E9%85%8D%E7%BD%AE%E8%AF%B4%E6%98%8E">配置说明</a>
+</h2>
+
+<h2>
+<a id="二代码解析" class="anchor" href="#%E4%BA%8C%E4%BB%A3%E7%A0%81%E8%A7%A3%E6%9E%90" aria-hidden="true"><span class="octicon octicon-link"></span></a>二：<a href="#%E4%BB%A3%E7%A0%81%E8%A7%A3%E6%9E%90">代码解析</a>
+</h2>
+
+<h2>
+<a id="三总结注意点" class="anchor" href="#%E4%B8%89%E6%80%BB%E7%BB%93%E6%B3%A8%E6%84%8F%E7%82%B9" aria-hidden="true"><span class="octicon octicon-link"></span></a>三：<a href="#%E6%80%BB%E7%BB%93%E6%B3%A8%E6%84%8F%E7%82%B9">总结注意点</a>
+</h2>
+
+<h1>
+<a id="配置说明" class="anchor" href="#%E9%85%8D%E7%BD%AE%E8%AF%B4%E6%98%8E" aria-hidden="true"><span class="octicon octicon-link"></span></a>配置说明</h1>
+
+<div class="highlight highlight-source-nginx"><pre><span class="pl-k">upstream</span> <span class="pl-en">backend </span>{
+        <span class="pl-k">dynamic_resolve</span> fallback=stale fail_timeout=30s;
+
+        <span class="pl-k">server</span> www.baidu.com;
+
+    }
+
+    <span class="pl-k">server</span> {
+
+
+        <span class="pl-k">location</span> <span class="pl-en">/ </span>{
+            <span class="pl-k">proxy_pass</span> http://backend;
+        }
+    }</pre></div>
+
+<p>指定在某个upstream中启用动态域名解析功能。</p>
+
+<p>解析:<br>
+其中有一个结构体类型:</p>
+
+<div class="highlight highlight-source-c"><pre><span class="pl-c1">ngx_http_upstream_dynamic_srv_t</span>  {
+    <span class="pl-c1">ngx_int_t</span>     enabled;
+    <span class="pl-c1">ngx_int_t</span>     fallback;
+    <span class="pl-c1">time_t</span>        fail_timeout;
+    <span class="pl-c1">time_t</span>        fail_check;
+
+    ngx_http_upstream_init_pt  original_init_get_peer;
+        <span class="pl-c1">ngx_http_upstream_init_peer_t</span>  original_init_peer;
+}
+</pre></div>
+
+<p>属性含义：     </p>
+
+<ul>
+<li>fallback参数指定了当域名无法解析时采取的动作：</li>
+<li>stale, 使用tengine启动的时候获取的旧地址</li>
+<li> next, 选择upstream中的下一个server</li>
+<li>shutdown, 结束当前请求</li>
+<li>fail_timeout参数指定了将DNS服务当做无法使用的时间，也就是当某次DNS请求失败后，假定后续多长的时间内DNS服务依然不可用，以减少对无效DNS的查询。</li>
+</ul>
+
+<h1>
+<a id="代码解析" class="anchor" href="#%E4%BB%A3%E7%A0%81%E8%A7%A3%E6%9E%90" aria-hidden="true"><span class="octicon octicon-link"></span></a>代码解析</h1>
+
+<div class="highlight highlight-source-c"><pre><span class="pl-c">//发现dynamic_resolve指令的时候调用该函数进行处理</span>
+<span class="pl-k">static</span> <span class="pl-k">char</span> *
+<span class="pl-en">ngx_http_upstream_dynamic</span>(<span class="pl-c1">ngx_conf_t</span> *cf, <span class="pl-c1">ngx_command_t</span> *cmd, <span class="pl-k">void</span> *conf)
+{
+    <span class="pl-c1">ngx_http_upstream_srv_conf_t</span>            *uscf;
+    <span class="pl-c1">ngx_http_upstream_dynamic_srv_conf_t</span>    *dcf;
+    <span class="pl-c1">ngx_str_t</span>   *value, s;
+    <span class="pl-c1">ngx_uint_t</span>   i;
+    <span class="pl-c1">time_t</span>       fail_timeout;
+    <span class="pl-c1">ngx_int_t</span>    fallback;
+
+    uscf = <span class="pl-c1">ngx_http_conf_get_module_srv_conf</span>(cf, ngx_http_upstream_module);
+
+    dcf = <span class="pl-c1">ngx_http_conf_upstream_srv_conf</span>(uscf,
+                                          ngx_http_upstream_dynamic_module);
+
+    <span class="pl-k">if</span> (dcf-&gt;original_init_upstream) {
+        <span class="pl-k">return</span> <span class="pl-s"><span class="pl-pds">"</span>is duplicate<span class="pl-pds">"</span></span>;
+    }
+    <span class="pl-c">//设置原有的回调函数（可以叫做记录，本来应该赋给uscf-&gt;peer.init_upstream的）</span>
+    dcf-&gt;original_init_upstream = uscf-&gt;peer.<span class="pl-smi">init_upstream</span>
+                                  ? uscf-&gt;peer.<span class="pl-smi">init_upstream</span>
+                                  : ngx_http_upstream_init_round_robin;
+
+    uscf-&gt;peer.<span class="pl-smi">init_upstream</span> = ngx_http_upstream_init_dynamic;
+
+    <span class="pl-c">/* read options */</span>
+
+    <span class="pl-k">return</span> NGX_CONF_OK;
+}</pre></div>
+
+<p>上面设置的uscf-&gt;peer.init_upstream函数在 ngx_http_upstream_init_main_conf中调用，其uscf-&gt;peer.init_upstream
+指向原型如下：   </p>
+
+<div class="highlight highlight-source-c"><pre><span class="pl-k">static</span> <span class="pl-c1">ngx_int_t</span>
+<span class="pl-en">ngx_http_upstream_init_dynamic</span>(<span class="pl-c1">ngx_conf_t</span> *cf,
+    <span class="pl-c1">ngx_http_upstream_srv_conf_t</span> *us)
+{
+
+    <span class="pl-c">//此处执行一个后端的负载均衡算法，默认是round_robin</span>
+    <span class="pl-k">if</span> (dcf-&gt;<span class="pl-c1">original_init_upstream</span>(cf, us) != NGX_OK) {
+        <span class="pl-k">return</span> NGX_ERROR;
+    }
+
+    <span class="pl-k">if</span> (us-&gt;servers) {
+        server = us-&gt;servers-&gt;elts;
+
+        <span class="pl-k">for</span> (i = <span class="pl-c1">0</span>; i &lt; us-&gt;servers-&gt;nelts; i++) {
+            host = server[i].<span class="pl-smi">host</span>;
+            <span class="pl-c">//将ip地址转换为长整形数字</span>
+            <span class="pl-k">if</span> (<span class="pl-c1">ngx_inet_addr</span>(host.<span class="pl-smi">data</span>, host.<span class="pl-smi">len</span>) == INADDR_NONE) {
+                <span class="pl-k">break</span>;
+            }
+        }
+
+        <span class="pl-k">if</span> (i == us-&gt;servers-&gt;nelts) {
+            dcf-&gt;enabled = <span class="pl-c1">0</span>;
+
+            <span class="pl-k">return</span> NGX_OK;
+        }
+    }
+    <span class="pl-c">// us-&gt;peer.init 默认是init_round_robin_peer函数  </span>
+    dcf-&gt;original_init_peer = us-&gt;peer.<span class="pl-smi">init</span>;
+    <span class="pl-c">//下面是当一个请求来到的时候进行调用该函数</span>
+    us-&gt;peer.<span class="pl-smi">init</span> = ngx_http_upstream_init_dynamic_peer;
+    <span class="pl-c">//把其设置为激活状态</span>
+    dcf-&gt;enabled = <span class="pl-c1">1</span>;
+
+    <span class="pl-k">return</span> NGX_OK;
+}</pre></div>
+
+<p>其中在ngx_http_upstream_init_request中调用 us-&gt;peer.init，其中在上面函数中其指向
+ngx_http_upstream_init_dynamic_peer如下：     </p>
+
+<div class="highlight highlight-source-c"><pre><span class="pl-k">static</span> <span class="pl-c1">ngx_int_t</span>
+<span class="pl-en">ngx_http_upstream_init_dynamic_peer</span>(<span class="pl-c1">ngx_http_request_t</span> *r,
+    <span class="pl-c1">ngx_http_upstream_srv_conf_t</span> *us)
+{
+
+    <span class="pl-c">//默认是init_round_robin_peer</span>
+    <span class="pl-k">if</span> (dcf-&gt;<span class="pl-c1">original_init_peer</span>(r, us) != NGX_OK) {
+        <span class="pl-k">return</span> NGX_ERROR;
+    }
+    <span class="pl-c">//下面就是一点小的技巧，修改原有回调指向，其实就想在原来的函数基础上增加自己的功能，自己的函数中再次调用</span>
+    <span class="pl-c">//原来的函数</span>
+    <span class="pl-c">//这个思想值得学习</span>
+    dp-&gt;conf = dcf;
+    dp-&gt;upstream = r-&gt;upstream;
+    dp-&gt;data = r-&gt;upstream-&gt;peer.<span class="pl-smi">data</span>;
+    dp-&gt;original_get_peer = r-&gt;upstream-&gt;peer.<span class="pl-smi">get</span>;
+    dp-&gt;original_free_peer = r-&gt;upstream-&gt;peer.<span class="pl-smi">free</span>;
+    dp-&gt;request = r;
+
+    r-&gt;upstream-&gt;peer.<span class="pl-smi">data</span> = dp;
+    r-&gt;upstream-&gt;peer.<span class="pl-smi">get</span> = ngx_http_upstream_get_dynamic_peer;
+    r-&gt;upstream-&gt;peer.<span class="pl-smi">free</span> = ngx_http_upstream_free_dynamic_peer;
+
+    <span class="pl-k">return</span> NGX_OK;
+}</pre></div>
+
+<p>最后在ngx_http_upstream_init_request函数中调用ngx_http_upstream_connect(r, u)在其又调用
+ngx_event_connect_peer(&amp;u-&gt;peer)  rc = pc-&gt;get(pc, pc-&gt;data);其中pc-&gt;get就是指向
+ngx_http_upstream_get_dynamic_peer;此时就完成了在upstream模块选择使用动态
+dns查询后端peer了。其中ngx_http_upstream_get_dynamic_peer如下：        </p>
+
+<div class="highlight highlight-source-c"><pre><span class="pl-k">static</span> <span class="pl-c1">ngx_int_t</span>
+ <span class="pl-en">ngx_http_upstream_get_dynamic_peer</span>(<span class="pl-c1">ngx_peer_connection_t</span> *pc, <span class="pl-k">void</span> *data)
+{
+    .....
+
+    <span class="pl-k">if</span> (pc-&gt;resolved == NGX_HTTP_UPSTREAM_DR_OK) {
+        <span class="pl-k">return</span> NGX_OK;
+    }
+
+    dscf = bp-&gt;conf;
+    r = bp-&gt;request;
+    u = r-&gt;upstream;
+   <span class="pl-c">//当dns无法解析的时候  按照配置文件所选择的方式进行执行   </span>
+    <span class="pl-k">if</span> (pc-&gt;resolved == NGX_HTTP_UPSTREAM_DR_FAILED) {
+
+        <span class="pl-c1">ngx_log_debug1</span>(NGX_LOG_DEBUG_HTTP, pc-&gt;<span class="pl-c1">log</span>, <span class="pl-c1">0</span>,
+                       <span class="pl-s"><span class="pl-pds">"</span>resolve failed! fallback: <span class="pl-c1">%u</span>i<span class="pl-pds">"</span></span>, dscf-&gt;fallback);
+
+        <span class="pl-k">switch</span> (dscf-&gt;fallback) {
+        <span class="pl-c">//当无法访问的时候还是使用旧的解析结果</span>
+        <span class="pl-k">case</span> NGX_HTTP_UPSTREAM_DYN_RESOLVE_STALE:
+            <span class="pl-k">return</span> NGX_OK;
+          <span class="pl-c">//当无法访问的时候把当其关闭</span>
+        <span class="pl-k">case</span> NGX_HTTP_UPSTREAM_DYN_RESOLVE_SHUTDOWN:
+            <span class="pl-c1">ngx_http_upstream_finalize_request</span>(r, u, NGX_HTTP_BAD_GATEWAY);
+            <span class="pl-k">return</span> NGX_YIELD;
+          <span class="pl-c">//当无法访问的时候默认使用下一个server</span>
+        <span class="pl-k">default</span>:
+            <span class="pl-c">/* default fallback action: check next upstream */</span>
+            <span class="pl-k">return</span> NGX_DECLINED;
+        }
+
+        <span class="pl-k">return</span> NGX_DECLINED;
+    }
+    <span class="pl-c">//当没有失败的时候则进行超时时间的判断，在timeout时间内dns是无效的</span>
+    <span class="pl-k">if</span> (dscf-&gt;fail_check
+        &amp;&amp; (<span class="pl-c1">ngx_time</span>() - dscf-&gt;fail_check &lt; dscf-&gt;fail_timeout))
+    {
+        <span class="pl-c1">ngx_log_debug1</span>(NGX_LOG_DEBUG_HTTP, pc-&gt;<span class="pl-c1">log</span>, <span class="pl-c1">0</span>,
+                       <span class="pl-s"><span class="pl-pds">"</span>in fail timeout period, fallback: <span class="pl-c1">%u</span>i<span class="pl-pds">"</span></span>, dscf-&gt;fallback);
+
+        <span class="pl-k">switch</span> (dscf-&gt;fallback) {
+
+        <span class="pl-k">case</span> NGX_HTTP_UPSTREAM_DYN_RESOLVE_STALE:
+            <span class="pl-k">return</span> bp-&gt;<span class="pl-c1">original_get_peer</span>(pc, bp-&gt;data);
+
+        <span class="pl-k">case</span> NGX_HTTP_UPSTREAM_DYN_RESOLVE_SHUTDOWN:
+            <span class="pl-c1">ngx_http_upstream_finalize_request</span>(r, u, NGX_HTTP_BAD_GATEWAY);
+            <span class="pl-k">return</span> NGX_YIELD;
+
+        <span class="pl-k">default</span>:
+            <span class="pl-c">/* default fallback action: check next upstream, still need</span>
+<span class="pl-c">             * to get peer in fail timeout period</span>
+<span class="pl-c">             */</span>
+            <span class="pl-k">return</span> bp-&gt;<span class="pl-c1">original_get_peer</span>(pc, bp-&gt;data);
+        }
+
+        <span class="pl-k">return</span> NGX_DECLINED;
+    }
+
+    <span class="pl-c">//bp-&gt;original_get_peer 其指向各种负载均衡算法的(ip_hash、round_robin、consistent_hash)get_peer</span>
+
+    rc = bp-&gt;<span class="pl-c1">original_get_peer</span>(pc, bp-&gt;data);
+
+    <span class="pl-k">if</span> (rc != NGX_OK) {
+        <span class="pl-k">return</span> rc;
+    }
+
+    <span class="pl-c">/* resolve name */</span>
+
+    <span class="pl-k">if</span> (pc-&gt;host == <span class="pl-c1">NULL</span>) {
+        <span class="pl-c1">ngx_log_debug0</span>(NGX_LOG_DEBUG_HTTP, pc-&gt;<span class="pl-c1">log</span>, <span class="pl-c1">0</span>,
+                       <span class="pl-s"><span class="pl-pds">"</span>load balancer doesn't support dyn resolve!<span class="pl-pds">"</span></span>);
+        <span class="pl-k">return</span> NGX_OK;
+    }
+    <span class="pl-c">//判断该host是不是一个IP  若是一个IP则直接返回</span>
+    <span class="pl-k">if</span> (<span class="pl-c1">ngx_inet_addr</span>(pc-&gt;host-&gt;data, pc-&gt;host-&gt;len) != INADDR_NONE) {
+        <span class="pl-c1">ngx_log_debug0</span>(NGX_LOG_DEBUG_HTTP, pc-&gt;<span class="pl-c1">log</span>, <span class="pl-c1">0</span>,
+                       <span class="pl-s"><span class="pl-pds">"</span>host is an IP address, connect directly!<span class="pl-pds">"</span></span>);
+        <span class="pl-k">return</span> NGX_OK;
+    }
+
+    clcf = <span class="pl-c1">ngx_http_get_module_loc_conf</span>(r, ngx_http_core_module);
+    <span class="pl-k">if</span> (clcf-&gt;resolver == <span class="pl-c1">NULL</span>) {
+        <span class="pl-c1">ngx_log_error</span>(NGX_LOG_ERR, r-&gt;connection-&gt;<span class="pl-c1">log</span>, <span class="pl-c1">0</span>,
+                      <span class="pl-s"><span class="pl-pds">"</span>resolver has not been configured!<span class="pl-pds">"</span></span>);
+        <span class="pl-k">return</span> NGX_OK;
+    }
+
+    temp.<span class="pl-smi">name</span> = *pc-&gt;host;
+    <span class="pl-c">//开始准备DNS解析 </span>
+    ctx = <span class="pl-c1">ngx_resolve_start</span>(clcf-&gt;resolver, &amp;temp);
+    <span class="pl-k">if</span> (ctx == <span class="pl-c1">NULL</span>) {
+        <span class="pl-c1">ngx_log_error</span>(NGX_LOG_ERR, r-&gt;connection-&gt;<span class="pl-c1">log</span>, <span class="pl-c1">0</span>,
+                      <span class="pl-s"><span class="pl-pds">"</span>resolver start failed!<span class="pl-pds">"</span></span>);
+        <span class="pl-k">return</span> NGX_OK;
+    }
+    <span class="pl-c">//当没有配置dns服务器的时候</span>
+    <span class="pl-k">if</span> (ctx == NGX_NO_RESOLVER) {
+        <span class="pl-c1">ngx_log_error</span>(NGX_LOG_ERR, r-&gt;connection-&gt;<span class="pl-c1">log</span>, <span class="pl-c1">0</span>,
+                      <span class="pl-s"><span class="pl-pds">"</span>resolver started but no resolver!<span class="pl-pds">"</span></span>);
+        <span class="pl-k">return</span> NGX_OK;
+    }
+
+    ctx-&gt;name = *pc-&gt;host;
+    <span class="pl-c">/* TODO remove */</span>
+    <span class="pl-c">// ctx-&gt;type = NGX_RESOLVE_A;</span>
+    <span class="pl-c">/* END */</span>
+    <span class="pl-c">//设置其回调函数</span>
+    <span class="pl-c">//此函数主要是做一些后续处理，如当dns查询成功或是失败修改一些状态  </span>
+    <span class="pl-c">//以及函数ngx_resolve_name_done的调用，用来释放一些空间以及调用ngx_resolver_expire</span>
+    <span class="pl-c">//上面函数做一些rn结点的过期检查 </span>
+    ctx-&gt;handler = ngx_http_upstream_dynamic_handler;
+    ctx-&gt;data = r;
+    ctx-&gt;timeout = clcf-&gt;resolver_timeout;
+
+    u-&gt;dyn_resolve_ctx = ctx;
+    <span class="pl-c">//根据名字进行dns查询</span>
+    <span class="pl-k">if</span> (<span class="pl-c1">ngx_resolve_name</span>(ctx) != NGX_OK) {
+        <span class="pl-c1">ngx_log_error</span>(NGX_LOG_ERR, pc-&gt;<span class="pl-c1">log</span>, <span class="pl-c1">0</span>,
+                      <span class="pl-s"><span class="pl-pds">"</span>resolver name failed!<span class="pl-cce">\n</span><span class="pl-pds">"</span></span>);
+
+        u-&gt;dyn_resolve_ctx = <span class="pl-c1">NULL</span>;
+
+        <span class="pl-k">return</span> NGX_OK;
+    }
+
+    <span class="pl-k">return</span> NGX_YIELD;
+}</pre></div>
+
+<h1>
+<a id="总结注意点" class="anchor" href="#%E6%80%BB%E7%BB%93%E6%B3%A8%E6%84%8F%E7%82%B9" aria-hidden="true"><span class="octicon octicon-link"></span></a>总结注意点</h1>
+
+<p>注意点:        </p>
+
+<ul>
+<li><p>1.当一个域名下对应有多个ip的时候:<br>
+  但是在调用ngx_http_upstream_get_dynamic_peer的时候调用round_robin_get_peer选择了一个server,但是其判
+断该peer的host-&gt;name是一个域名,此时nginx会做域名解析最后只会随机的进行选择一个server进行连接.其nginx是这样
+做的当一个域名对应多个ip的时候，对其获得的ip进行随机排序，最后是选择第一个。<br>
+  //当有多个addr的时候，函数是给 rn-&gt;naddrs 进行随机排序<br>
+   addrs = ngx_resolver_export(r, rn, 1);<br>
+  //每次只是选择域名下的第一个addr<br>
+    csin = (struct sockaddr_in *) ctx-&gt;addrs[0].sockaddr;      </p></li>
+<li><p>2.配置了dynamic_resolve指令可能不会生效:<br>
+  当在使用ngx_http_upstream_dynamic(upstream动态域名解析模块)模块的时候切记点:只有配置了resolver的时候
+才会去动态DNS查询(此处的配置resolver有两处:第一处是在nginx的配置文件中location server http配置块都可以  第
+二处是nginx会在该路径下读取(/etc/resolve.conf下寻找)当#define NGX_RESOLVER_FILE  "/etc/resolv.conf"))              </p></li>
+<li><p>3.当其upstream模块动态dns生效了如何进行dns解析:<br>
+  首先判断该host-&gt;name是一个ip还是一个域名,若是一个ip直接return ok,否则会在本地catche进行查询域名对应
+的ip,对其域名进行crc哈希得到一个hash值,然后在name_rbtree中进行查找得到resolver node节点(rn),进行判断rn ?= NULL ,
+当其不为空则表明在catche中找到了,然后判断其是否过期,没有过期的话就直接进行选择,执行回调函数ctx-&gt;handlr(ctx)设
+置pc-&gt;sockaddr进行后端的连接处理.当其所访问到的catche过期了则把该节点从队列中删除,然后重新发起dns请求,把得到的
+域名对应的ip copy到 name_rbtree rn中(rn-&gt;u.addrs=addr).(注意在前面只是删除了队列中数据  并没有删除name_rbtree中
+的节点)(之所以要这样做原因是：每次解析完了都会去判断队列中最后两个节点，判断其是否是过期了，若是则把其从队列中
+删除以及红黑树中删除，释放该节点)   </p></li>
+<li><p>4.当查询一个catch中不存在的域名的时候:<br>
+  这个和第3点就多一步工作分配一个rn节点,并且插入name_rbtree中,得到该值后在插入队列.</p></li>
+<li><p>5.缓存中的rn节点失效时间是如何管理的:<br>
+  其中在resolver指令有一个参数vailed值(r-&gt;vailed = vailed),其中在进行节点失效与否时有这样一句: 
+  rn-&gt;vailed &gt;= ngx_time();
+  其中rn-&gt;vailed = ngx_time() + (r-&gt;vailed ? r-&gt;vailed : rn-&gt;ttl):
+  其中rn-&gt;ttl = 0xff ff ff ff default  rn-&gt;ttl = min(rn-&gt;ttl,ttl)  ttl 是每次dns返回来的ttl.
+  所以其rn节点的有效时间用户可以自己配置,若没有配置则使用dns返回来的ttl作为有效时间.</p></li>
+<li><p>6.当本地catch的某一个rn节点长期没有访问时如何处理:<br>
+  每次在get_dynamic_peer查询结束的时候（调用ngx_resolve_addr_done），都会检查有没有缓存过期，如果有，就会进
+行释放。<br>
+  其原理就是调用:ngx_resolver_expire  其中:
+       q = ngx_queue_last(queue);<br>
+       rn = ngx_queue_data(q,ngx_resolver_node_t,queue);
+       now=ngx_now  if now &gt; rn-&gt;expire  则把该rn节点分别从queue以及name_rbtree中删除.
+       其中每次缓存命中的时候都会 update expire: rn-&gt;expire = r-&gt;expire + ngx_now(); r-&gt;expire=30</p></li>
+<li><p>7.区分resolver指令中的vailed与dynamic_resolve中的fail_timeout的区别:<br>
+  其中resolver指令中的vailed是catche中rn节点的有效期时间,dynamic_resolve中的fail_timeout表示上次dns解析失败
+与本次是否可以使用dns解析最大时间间隔(即DNS服务无法使用的时间).      </p></li>
+<li><p>8.当其resolver后配置了多个server的时候(即有多个dns的时候)：<br>
+  nginx 会采用Round Robin的方式轮流查询各个dns server。在方法ngx_resolver_send_query中通过在每次调用时改变
+last_connection来轮流使用不同的dns server进行查询.   </p></li>
+<li><p>9.在域名后面是否可以指定weight等参数：<br>
+  在upstream模块的server模块若后面给得是一个域名，是可以指定其weight的值，其实可以这样理解一个域名对应有ip
+（可能有多个ip），其weight值就是其ip对应的weight.其相应的参数是否生效只和相应的负载均衡算法有关，如在使用
+ip_hash算法的时候其中backup参数对其无效.      </p></li>
+<li>
+<p>10.dns本地缓存数据结构以及架构是如何设计的:<br>
+   函数ngx_resolver_create()对其进行创建:
+   对查询结果的缓存，采用Red Black Tree的数据结构，以要查询名字的Hash作为Key,其中有可能不同域名的hash的值
+相同,此时则比较域名的字符串大小插入rbtree中,当然最后查询的时候也是按照同样的规则进行查找,节点信息存放在 
+struct ngx_resolver_node_t中。
+  因为resolver是全局的，与任何一个connection都无关，所有需要放在一个随时都可以取到的地方，如 
+ngx_mail_core_srv_conf_t结构体上，在使用时从当前session找到ngx_mail_core_srv_conf_t，然后找到resolver。      </p>
+
+<p>为不阻塞当前线程，Nginx采用了异步的方式进行域名查询。整个查询过程主要分为三个步骤，这点在各种异步处理时都
+是一样的：<br>
+     (1).准备函数调用需要的信息，并设置回调方法
+     (2).调用函数
+     (3).处理结束后回调方法被调用</p>
+</li>
+</ul>
+
+<h1>
+<a id="欢迎一起交流学习-" class="anchor" href="#%E6%AC%A2%E8%BF%8E%E4%B8%80%E8%B5%B7%E4%BA%A4%E6%B5%81%E5%AD%A6%E4%B9%A0-" aria-hidden="true"><span class="octicon octicon-link"></span></a>欢迎一起交流学习 </h1>
 
 <p>在使用中有任何问题，欢迎反馈给我，可以用以下联系方式跟我交流</p>
 
@@ -103,20 +410,21 @@ $host代替$http_host变量，从而避免http请求中丢失Host头部的情况
 </li>
 </ul>
 
-<h2>
-<a id="感激" class="anchor" href="#%E6%84%9F%E6%BF%80" aria-hidden="true"><span class="octicon octicon-link"></span></a>感激</h2>
+<h1>
+<a id="thx" class="anchor" href="#thx" aria-hidden="true"><span class="octicon octicon-link"></span></a>Thx</h1>
 
-<h3>
-<a id="chunshengsteratgmailcom" class="anchor" href="#chunshengsteratgmailcom" aria-hidden="true"><span class="octicon octicon-link"></span></a>chunshengsterATgmail.com</h3>
+<ul>
+<li>chunshengsterATgmail.com</li>
+</ul>
 
-<h2>
-<a id="关于作者" class="anchor" href="#%E5%85%B3%E4%BA%8E%E4%BD%9C%E8%80%85" aria-hidden="true"><span class="octicon octicon-link"></span></a>关于作者</h2>
+<h1>
+<a id="author" class="anchor" href="#author" aria-hidden="true"><span class="octicon octicon-link"></span></a>Author</h1>
 
-<h3>
-<a id="linuxnginxgolangcc爱好者" class="anchor" href="#linuxnginxgolangcc%E7%88%B1%E5%A5%BD%E8%80%85" aria-hidden="true"><span class="octicon octicon-link"></span></a>Linux\nginx\golang\c\c++爱好者</h3>
-
-<h3>
-<a id="欢迎一起交流--一起学习" class="anchor" href="#%E6%AC%A2%E8%BF%8E%E4%B8%80%E8%B5%B7%E4%BA%A4%E6%B5%81--%E4%B8%80%E8%B5%B7%E5%AD%A6%E4%B9%A0" aria-hidden="true"><span class="octicon octicon-link"></span></a>欢迎一起交流  一起学习#</h3>
+<ul>
+<li>Linux\nginx\golang\c\c++爱好者</li>
+<li>欢迎一起交流  一起学习# </li>
+<li>Others say good and Others good</li>
+</ul>
       </section>
       <footer>
         <p><small>Hosted on <a href="https://pages.github.com">GitHub Pages</a> using the Dinky theme</small></p>
